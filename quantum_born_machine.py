@@ -5,7 +5,7 @@ import pennylane as qml
 # from pennylane import numpy as pnp # PennyLane's NumPy, usually not needed when interface="torch"
 
 # Assuming generate_all_binary_outcomes is in your utils.py
-# from utils import generate_all_binary_outcomes # Will be imported in __main__ if fallback needed
+# Will be imported in __main__ with a fallback if needed for standalone testing
 
 class QuantumBornMachine(nn.Module):
     def __init__(self, num_latent_vars, ansatz_layers=1, conditioning_dim=0, device_name="default.qubit"):
@@ -21,57 +21,39 @@ class QuantumBornMachine(nn.Module):
         """
         super().__init__()
         self.num_latent_vars = num_latent_vars
-        self.conditioning_dim = conditioning_dim # Placeholder for future use in ansatz
+        self.conditioning_dim = conditioning_dim 
 
-        # Define the PennyLane quantum device. shots=None for exact probabilities.
         self.dev = qml.device(device_name, wires=self.num_latent_vars, shots=None)
 
-        # Determine the number of parameters for the ansatz
-        # Example: Hardware-efficient ansatz inspired by Fig. 5 of PhysRevApplied.16.044057
-        # Each layer has RY, RZ per qubit, then a ring of CNOTs.
-        # So, 2 parameters per qubit per layer.
         self.num_ansatz_params = ansatz_layers * 2 * self.num_latent_vars
         
-        # PyTorch parameters for the PQC weights (theta)
-        # Initialize with random values, e.g., from a uniform distribution
-        # Ensure theta is float32 by default, PennyLane will handle casting if device uses float64
         self.theta = nn.Parameter(torch.rand(self.num_ansatz_params, dtype=torch.float32) * 2 * torch.pi)
 
-
-        # Define the QNode: this binds the PQC to the device and makes it differentiable
-        @qml.qnode(self.dev, interface="torch", diff_method="parameter-shift")
-        def pqc(weights, x_inputs=None): # x_inputs for potential conditioning
-            # Example PQC Ansatz (Hardware-efficient style)
-            # `weights` will be self.theta
-            # `x_inputs` is a placeholder if conditioning data needs to be passed directly
-            
-            param_idx = 0
-            for layer_idx in range(ansatz_layers):
-                # Layer of single-qubit rotations
-                for i in range(self.num_latent_vars):
-                    qml.RY(weights[param_idx], wires=i); param_idx += 1
-                    qml.RZ(weights[param_idx], wires=i); param_idx += 1
-                
-                # Layer of entangling gates (e.g., CNOTs in a ring or ladder)
-                if self.num_latent_vars > 1: # Add entanglers if more than 1 qubit
-                    for i in range(self.num_latent_vars -1):
-                        qml.CNOT(wires=[i, i + 1])
-                    if self.num_latent_vars > 2 : # To make it a ring for >2 qubits for better entanglement
-                         qml.CNOT(wires=[self.num_latent_vars - 1, 0])
-            
-            # Return probabilities of all computational basis states
-            return qml.probs(wires=range(self.num_latent_vars))
-            
-        self.pqc = pqc
-        
-        # For converting indices to outcome tuples and vice-versa
-        # This needs to be imported or defined. Assuming it's available.
-        from utils import generate_all_binary_outcomes # Placed here for clarity
+        from utils import generate_all_binary_outcomes 
         self.all_outcomes_tuples = generate_all_binary_outcomes(self.num_latent_vars)
         if not self.all_outcomes_tuples and self.num_latent_vars > 0: 
             raise ValueError("Failed to generate outcome tuples. Check num_latent_vars.")
         elif self.num_latent_vars == 0: 
             self.all_outcomes_tuples = [()]
+
+
+        @qml.qnode(self.dev, interface="torch", diff_method="parameter-shift")
+        def pqc(weights, x_inputs=None): 
+            param_idx = 0
+            for layer_idx in range(ansatz_layers):
+                for i in range(self.num_latent_vars):
+                    qml.RY(weights[param_idx], wires=i); param_idx += 1
+                    qml.RZ(weights[param_idx], wires=i); param_idx += 1
+                
+                if self.num_latent_vars > 1: 
+                    for i in range(self.num_latent_vars -1):
+                        qml.CNOT(wires=[i, i + 1])
+                    if self.num_latent_vars > 2 : 
+                         qml.CNOT(wires=[self.num_latent_vars - 1, 0])
+            
+            return qml.probs(wires=range(self.num_latent_vars))
+            
+        self.pqc = pqc
 
 
     def get_probabilities(self, x_condition=None):
@@ -81,11 +63,28 @@ class QuantumBornMachine(nn.Module):
         """
         if self.conditioning_dim > 0 and x_condition is not None:
             print("Warning: Conditioning with x_condition not fully implemented in PQC ansatz yet.")
-            pass 
+            pass # Falls through to using self.theta only
             
-        # Ensure weights passed to pqc match the dtype expected by PennyLane qnode if necessary,
-        # though PennyLane usually handles torch.float32 inputs well.
         return self.pqc(weights=self.theta)
+
+    def get_prob_dict(self, x_condition=None): # ADDED THIS METHOD
+        """
+        Returns the probability distribution as a dictionary: {outcome_tuple: probability}.
+        Intended for a single x_condition or unconditioned.
+        Output probabilities are float (from .item() or .tolist()).
+        """
+        probs_tensor = self.get_probabilities(x_condition=x_condition) 
+        
+        if probs_tensor.shape[0] != len(self.all_outcomes_tuples):
+             raise ValueError(f"Mismatch between probability tensor shape {probs_tensor.shape} and number of outcomes {len(self.all_outcomes_tuples)}")
+
+        # Detach and move to CPU for numpy conversion if needed, then to list of Python floats
+        probs_list = probs_tensor.detach().cpu().tolist() 
+        
+        prob_dict = {}
+        for i, outcome_tuple in enumerate(self.all_outcomes_tuples):
+            prob_dict[outcome_tuple] = probs_list[i]
+        return prob_dict
 
     def sample(self, num_samples_to_draw, x_condition=None):
         """
@@ -101,16 +100,16 @@ class QuantumBornMachine(nn.Module):
         if self.num_latent_vars == 0:
             return torch.empty(num_samples_to_draw, 0, dtype=torch.float32, device=self.theta.device)
 
-        # .detach() as sampling itself is not end-to-end differentiable for REINFORCE policy
-        # The log_prob of the action is what's differentiated.
-        # Ensure probs are on CPU for multinomial if it has issues with CUDA tensors without explicit handling
         probs = self.get_probabilities(x_condition=x_condition).detach().cpu() 
         
         if probs.ndim > 1:
             if probs.shape[0] == 1 and probs.ndim == 2: probs = probs.squeeze(0)
             else: raise ValueError(f"Probabilities for sampling should be 1D, but got shape {probs.shape}")
-        if probs.shape[0] == 0 and self.num_latent_vars > 0 : # Check for empty probs only if expecting >0 outcomes
+        if probs.shape[0] == 0 and self.num_latent_vars > 0 : 
              raise ValueError("Probability vector is empty.")
+
+        # Ensure probs sum to 1 for multinomial, handle potential small numerical errors
+        probs = probs / torch.sum(probs)
 
 
         sampled_indices = torch.multinomial(probs, num_samples_to_draw, replacement=True)
@@ -141,7 +140,7 @@ class QuantumBornMachine(nn.Module):
             return torch.zeros(z_samples_batch.shape[0], device=self.theta.device)
 
         probs_all_states = self.get_probabilities(x_condition=x_condition)
-        log_probs_all_states = torch.log(probs_all_states + 1e-9) 
+        log_probs_all_states = torch.log(probs_all_states.clamp(min=1e-9)) # Use clamp for stability
 
         selected_log_probs = []
         for z_sample_tensor in z_samples_batch:
@@ -157,11 +156,10 @@ class QuantumBornMachine(nn.Module):
         return torch.stack(selected_log_probs)
 
 if __name__ == '__main__':
-    # Ensure generate_all_binary_outcomes is accessible for the test
     try:
         from utils import generate_all_binary_outcomes
     except ImportError:
-        def generate_all_binary_outcomes(num_vars): # Fallback
+        def generate_all_binary_outcomes(num_vars): 
             if num_vars == 0: return [()]
             outcomes = []
             for i in range(2**num_vars):
@@ -182,24 +180,33 @@ if __name__ == '__main__':
     print("Probabilities shape:", probs.shape)
     print("Probabilities sum:", torch.sum(probs))
     print("Probabilities vector (first few):", probs[:min(5, len(probs))].tolist())
-    # Corrected assertion: make the comparison tensor dtype torch.float64
     assert torch.isclose(torch.sum(probs), torch.tensor(1.0, dtype=probs.dtype)), "Probabilities should sum to 1"
+
+    # Test get_prob_dict
+    print("\n--- Testing get_prob_dict ---")
+    prob_dict_qbm = qbm.get_prob_dict()
+    print("Prob dict (first few items):", {k: prob_dict_qbm[k] for k in list(prob_dict_qbm)[:min(5, len(prob_dict_qbm))]})
+    assert abs(sum(prob_dict_qbm.values()) - 1.0) < 1e-5, "Probabilities in dict should sum to 1"
+    assert len(prob_dict_qbm) == 2**num_qubits, "Prob dict should have 2^N_qubits entries"
 
 
     print("\n--- Testing sample ---")
     num_s = 5
     samples = qbm.sample(num_samples_to_draw=num_s)
     print(f"Sampled {num_s} states (shape {samples.shape}):\n", samples)
-    assert samples.shape == (num_s, num_qubits), "Samples shape mismatch"
+    if num_qubits > 0: # Only assert shape if there are qubits
+        assert samples.shape == (num_s, num_qubits), "Samples shape mismatch"
+    else: # If 0 qubits, samples should be (num_s, 0)
+        assert samples.shape == (num_s, 0), "Samples shape mismatch for 0 qubits"
+
 
     print("\n--- Testing get_log_q_z_x and gradients ---")
-    if samples.shape[0] > 0: 
+    if num_qubits > 0 and samples.shape[0] > 0: 
         test_z_batch = samples.to(qbm.theta.device) 
         
         log_probs_of_samples = qbm.get_log_q_z_x(test_z_batch)
         print("Log_probs of sampled states:", log_probs_of_samples)
         
-        # Ensure dummy_loss is of the same dtype as theta for backward pass
         dummy_loss = -log_probs_of_samples.mean().type_as(qbm.theta)
         print("Dummy loss:", dummy_loss.item())
 
@@ -211,6 +218,8 @@ if __name__ == '__main__':
             print("Gradient (first few params):", qbm.theta.grad[:min(5, len(qbm.theta.grad))].tolist())
         else:
             print("Gradients for theta are None. Something went wrong with diff.")
+    elif num_qubits == 0:
+        print("Skipping gradient test for 0 qubits (no parameters to optimize).")
     else:
         print("No samples drawn, skipping gradient test.")
 
