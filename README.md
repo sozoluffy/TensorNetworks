@@ -266,7 +266,7 @@ If you use this code in your research, please cite:
 ```
 @article{PhysRevApplied.16.044057,
   title = {Variational inference with a quantum computer},
-  author = {...},
+  author = {Marcello Benedetti, Brian Coyle, Mattia Fiorentini, Michael Lubasch, Matthias Rosenkranz},
   journal = {Phys. Rev. Applied},
   volume = {16},
   pages = {044057},
