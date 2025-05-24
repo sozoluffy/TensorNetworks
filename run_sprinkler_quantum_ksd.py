@@ -146,6 +146,63 @@ def run_sprinkler_quantum_ksd_experiment():
     print(f"Max pointwise difference: {max_diff:.6f}")
     print(f"Best TVD achieved during training: {min(training_history['tvd']):.6f}")
 
+    # Additional analysis
+    print("\n--- Training Statistics ---")
+    # Recalculate TVD to verify
+    final_tvd_verified = calculate_tvd(true_posterior_dist, learned_dist_dict)
+    best_tvd = min(training_history['tvd']) if training_history['tvd'] else final_tvd_verified
+    
+    if training_history['tvd']:
+        tvd_array = np.array(training_history['tvd'])
+        print(f"Mean TVD: {np.mean(tvd_array):.6f}")
+        print(f"Std TVD: {np.std(tvd_array):.6f}")
+        print(f"Min TVD: {np.min(tvd_array):.6f}")
+        print(f"Final 100 epochs mean TVD: {np.mean(tvd_array[-100:]):.6f}")
+        
+        # Check stability in final epochs
+        if len(tvd_array) > 200:
+            early_std = np.std(tvd_array[:100])
+            late_std = np.std(tvd_array[-100:])
+            print(f"\nStability Analysis:")
+            print(f"Early training std (first 100 epochs): {early_std:.6f}")
+            print(f"Late training std (last 100 epochs): {late_std:.6f}")
+            
+            if late_std > early_std * 2:
+                print("Warning: Training became less stable over time.")
+    
+    # Plot probability comparison
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    
+    # True posterior
+    true_probs = [true_posterior_dist[outcome] for outcome in all_possible_latent_outcomes]
+    outcome_labels = [str(outcome) for outcome in all_possible_latent_outcomes]
+    x_pos = np.arange(len(outcome_labels))
+    
+    ax1.bar(x_pos, true_probs, alpha=0.7, label='True Posterior')
+    ax1.set_xlabel('Outcome (C,S,R)')
+    ax1.set_ylabel('Probability')
+    ax1.set_title('True Posterior P(C,S,R | W=1)')
+    ax1.set_xticks(x_pos)
+    ax1.set_xticklabels(outcome_labels, rotation=45)
+    ax1.grid(True, alpha=0.3)
+    
+    # Learned posterior
+    learned_probs = [learned_dist_dict[outcome] for outcome in all_possible_latent_outcomes]
+    
+    width = 0.35
+    ax2.bar(x_pos - width/2, true_probs, width, alpha=0.7, label='True')
+    ax2.bar(x_pos + width/2, learned_probs, width, alpha=0.7, label='Learned')
+    ax2.set_xlabel('Outcome (C,S,R)')
+    ax2.set_ylabel('Probability')
+    ax2.set_title(f'Posterior Comparison (TVD = {final_tvd_verified:.6f})')
+    ax2.set_xticks(x_pos)
+    ax2.set_xticklabels(outcome_labels, rotation=45)
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.show()    
+
 
 if __name__ == '__main__':
     run_sprinkler_quantum_ksd_experiment()
