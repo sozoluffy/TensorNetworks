@@ -1,101 +1,283 @@
 # Quantum-Inspired Variational Inference in Python
 
-This project provides a Python-based classical simulation framework for variational inference (VI) techniques inspired by the paper "Variational Inference with a Quantum Computer" (PhysRevApplied.16.044057). It focuses on implementing the adversarial and Kernelized Stein Discrepancy (KSD) methods for approximate inference in Bayesian networks.
+A Python implementation of variational inference techniques inspired by the paper "Variational Inference with a Quantum Computer" (PhysRevApplied.16.044057). This project provides both classical simulations and quantum implementations of Born machine-based variational inference for discrete Bayesian networks.
 
-**Disclaimer:** This is a classical simulation. It does *not* implement actual quantum circuits or aim to demonstrate quantum advantage. Instead, it explores the algorithmic aspects of using Born-machine-like parameterized distributions for VI within a classical machine learning context.
+## Overview
 
-## Project Status
+This project implements two main variational inference approaches:
 
-* **Adversarial Variational Inference (KL-based):** Successfully implemented for discrete Bayesian Networks.
-    * The method utilizes a classical analogue of a Born machine (a parameterized probability distribution) and an adversarial classifier.
-    * Training employs the REINFORCE algorithm for the Born machine's gradient estimation, which was crucial for effective learning.
-    * Demonstrated promising results on the "Sprinkler" Bayesian network, achieving significant reduction in Total Variation Distance (TVD) between the learned and true posterior distributions.
-* **Kernelized Stein Discrepancy (KSD) Variational Inference:** Successfully implemented for discrete Bayesian Networks.
-    * Uses an exact sum computation for the KSD objective (feasible for small state spaces like the Sprinkler network), avoiding sampling for the KSD term itself.
-    * Demonstrated excellent results on the "Sprinkler" Bayesian network, achieving very low TVD (e.g., ~0.0004) and a close match to the true posterior.
-* **Next Major Step:** Exploring quantum implementations/simulations.
+1. **Adversarial Variational Inference (KL-based)**: Uses an adversarial classifier to distinguish between samples from the Born machine and prior distribution
+2. **Kernelized Stein Discrepancy (KSD) Variational Inference**: Minimizes the KSD between the variational and target distributions
 
-## Project Goals
+Both methods are implemented with:
+- **Classical Born Machines**: Neural network-based parameterized distributions
+- **Quantum Born Machines**: Parameterized quantum circuits using PennyLane
 
-* Implement a flexible way to define and sample from discrete Bayesian Networks.
-* Simulate a "Born Machine" classically as a parameterized probability distribution.
-* Implement the adversarial VI training loop, including a neural network classifier and REINFORCE gradient estimation.
-* Implement the Kernelized Stein Discrepancy (KSD) VI method using an exact kernel sum for small state spaces.
-* Provide example usage for simple Bayesian networks like the "Sprinkler" network for both methods.
-* (Future) Explore quantum circuit implementations for the Born machine.
+## Features
 
-## Structure
+- ✅ Flexible Bayesian Network framework for discrete variables
+- ✅ Classical Born machine with neural network parameterization
+- ✅ Quantum Born machine with multiple ansatz options
+- ✅ Adversarial VI with REINFORCE gradient estimation
+- ✅ KSD VI with exact computation for small state spaces
+- ✅ Comprehensive training utilities with stability enhancements
+- ✅ Detailed visualization and analysis tools
 
-* `bayesian_network.py`: Defines Bayesian Network structures, conditional probability tables (CPTs), and sampling.
-* `born_machine_classical_sim.py`: Implements a classical, parameterized probability distribution that serves as an analogue to the quantum Born machine.
-* `classifier_pytorch.py`: A simple neural network classifier (e.g., MLP) implemented using PyTorch, used in the adversarial VI method.
-* `adversarial_vi.py`: Contains the logic for the adversarial training procedure.
-* `stein_utils.py`: Helper functions specific to the KSD method (score function, Stein kernel components).
-* `ksd_vi.py`: Contains the logic for the KSD-based VI training procedure.
-* `utils.py`: General utility functions (e.g., for calculating Total Variation Distance (TVD), plotting, generating binary outcomes).
-* `run_sprinkler_adversarial.py`: Example script to demonstrate adversarial VI on the Sprinkler network.
-* `run_sprinkler_ksd.py`: Example script to demonstrate KSD VI on the Sprinkler network.
-* `requirements.txt`: Lists necessary Python packages.
+## Project Structure
 
-## Getting Started
+```
+.
+├── bayesian_network.py           # Bayesian Network implementation
+├── born_machine_classical_sim.py # Classical Born machine
+├── quantum_born_machine.py       # Quantum Born machine (PennyLane)
+├── classifier_pytorch.py         # Neural network classifier for adversarial VI
+├── adversarial_vi.py            # Adversarial VI training logic
+├── ksd_vi.py                    # Classical KSD VI implementation
+├── ksd_vi_quantum.py            # Quantum KSD VI implementation
+├── stein_utils.py               # KSD helper functions
+├── utils.py                     # General utilities (TVD, plotting, etc.)
+├── run_sprinkler_adversarial.py # Example: Adversarial VI on Sprinkler network
+├── run_sprinkler_ksd.py         # Example: Classical KSD VI on Sprinkler network
+├── run_sprinkler_quantum_ksd.py # Example: Quantum KSD VI on Sprinkler network
+└── requirements.txt             # Python dependencies
+```
 
-1.  **Clone the repository:**
-    ```bash
-    git clone [https://github.com/sozoluffy/TensorNetworks.git](https://github.com/sozoluffy/TensorNetworks.git)
-    cd TensorNetworks
-    ```
+## Installation
 
-2.  **Create a virtual environment and install dependencies:**
-    * **Using `venv`:**
-        ```bash
-        python3 -m venv venv  # Or python -m venv venv on Windows
-        source venv/bin/activate  # On Windows: venv\Scripts\activate
-        pip install -r requirements.txt
-        ```
-    * **Using `conda`:**
-        ```bash
-        conda create --name qvi_env python=3.9 # Or your preferred python version
-        conda activate qvi_env
-        pip install -r requirements.txt
-        # Alternatively, for a more conda-centric approach, create an environment.yml
-        ```
+1. Clone the repository:
+```bash
+git clone https://github.com/sozoluffy/TensorNetworks.git
+cd TensorNetworks
+```
 
-3.  **Run an Example:**
-    * For Adversarial VI:
-        ```bash
-        python run_sprinkler_adversarial.py
-        ```
-    * For KSD VI:
-        ```bash
-        python run_sprinkler_ksd.py
-        ```
+2. Create a virtual environment:
 
-## Key Concepts from the Paper Implemented (Classically)
+**Using venv:**
+```bash
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
 
-* **Variational Inference (VI):** Approximating a complex target probability distribution (the posterior) with a simpler, parameterized distribution (the variational distribution) by optimizing its parameters.
-* **Born Machine (Classical Analogue):** A quantum circuit would produce samples based on Born rule. Our classical analogue uses a neural network to output a categorical distribution.
-* **Adversarial Objective (KL Divergence based):** A classifier distinguishes samples from the Born machine and a prior. The Born machine is trained to fool this classifier.
-* **REINFORCE Algorithm:** Used for gradient estimation for the Born machine in the adversarial setup due to discrete sampling.
-* **Kernelized Stein Discrepancy (KSD):** An alternative VI objective measuring discrepancy using a kernel function and the Stein operator. Our implementation uses an exact sum for $K_x(\theta)$ for small problems.
+**Using conda:**
+```bash
+conda create --name qvi_env python=3.9
+conda activate qvi_env
+```
 
-## Potential Next Steps for Refinement & Quantum Exploration
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
 
-1.  **Quantum Implementation of Born Machine:**
-    * Replace `ClassicalBornMachine` with a Parameterized Quantum Circuit (PQC) using a library like Qiskit, Cirq, or PennyLane.
-    * Implement gradient estimation for PQCs (e.g., parameter-shift rule).
-    * Adapt VI algorithms to use the PQC, its sampling methods, and gradient calculations.
-    * Explore ansatz design and address quantum-specific challenges (barren plateaus, noise if using real hardware).
-2.  **Saving the Best Model:** Modify training loops to save model parameters achieving the lowest TVD.
-3.  **Learning Rate Schedule & Advanced Hyperparameter Tuning:** Implement learning rate decay and further tune parameters for both VI methods.
-4.  **REINFORCE with a Baseline (for Adversarial VI):** Implement a baseline to reduce variance for more stable training.
-5.  **Sample-based KSD:** For larger state spaces where the exact sum for $K_x(\theta)$ is infeasible, implement the sample-based estimation of the KSD objective and its gradient (potentially requiring REINFORCE-like ideas for $\nabla_\theta K_x(\theta)$ if not using parameter-shift on a PQC directly).
-6.  **More Complex Bayesian Networks:** Test with larger networks (e.g., "Lung Cancer" network).
-7.  **Amortization:** Fully implement and test amortization where the Born machine conditions on various observations `x` from a dataset.
+For quantum implementations, also install PennyLane:
+```bash
+pip install pennylane
+```
+
+## Quick Start
+
+### Running Adversarial VI
+
+```bash
+python run_sprinkler_adversarial.py
+```
+
+This demonstrates adversarial variational inference on the Sprinkler Bayesian network, learning P(C,S,R | W=1).
+
+### Running Classical KSD VI
+
+```bash
+python run_sprinkler_ksd.py
+```
+
+This runs KSD-based variational inference using a classical Born machine.
+
+### Running Quantum KSD VI
+
+```bash
+python run_sprinkler_quantum_ksd.py
+```
+
+This demonstrates KSD VI using a quantum Born machine implemented with PennyLane.
+
+## Key Concepts
+
+### Bayesian Networks
+The framework supports discrete Bayesian networks with binary variables. Example networks include:
+- **Sprinkler Network**: Classic 4-variable network (Cloudy, Sprinkler, Rain, Grass Wet)
+- Custom networks can be easily defined using conditional probability tables (CPTs)
+
+### Born Machines
+- **Classical**: Uses neural networks to parameterize probability distributions
+- **Quantum**: Uses parameterized quantum circuits (PQCs) with measurement in computational basis
+
+### Variational Inference Methods
+
+#### Adversarial VI
+- Objective: min_θ KL[q_θ(z|x) || p(z|x)]
+- Uses adversarial classifier to estimate log density ratio
+- REINFORCE algorithm for gradient estimation
+- Features: baseline variance reduction, gradient clipping, learning rate scheduling
+
+#### KSD VI
+- Objective: min_θ KSD[q_θ(z|x), p(z|x)]
+- Direct minimization of kernelized Stein discrepancy
+- Exact computation for small state spaces
+- Gradient-based optimization with parameter-shift rule for quantum circuits
+
+## Detailed Usage
+
+### Creating a Bayesian Network
+
+```python
+from bayesian_network import BayesianNetwork
+
+# Create a simple A → B network
+bn = BayesianNetwork()
+bn.add_node('A', cpt={(): {0: 0.7, 1: 0.3}})
+bn.add_node('B', cpt={
+    (0,): {0: 0.9, 1: 0.1},  # P(B|A=0)
+    (1,): {0: 0.2, 1: 0.8}   # P(B|A=1)
+}, parent_names=['A'])
+```
+
+### Running Adversarial VI
+
+```python
+from adversarial_vi import AdversarialVariationalInference
+from bayesian_network import get_sprinkler_network
+
+# Setup
+bn = get_sprinkler_network()
+latent_vars = ['C', 'S', 'R']
+observed_vars = ['W']
+observation = {'W': 1}
+
+# Configure Born machine and classifier
+born_config = {
+    'use_logits': True,
+    'conditioning_dim': len(observed_vars),
+    'init_method': 'uniform'
+}
+classifier_config = {
+    'hidden_dims': [32, 16],
+    'use_batch_norm': False
+}
+
+# Initialize and train
+model = AdversarialVariationalInference(
+    bn, latent_vars, observed_vars,
+    born_config, classifier_config
+)
+
+history = model.train(
+    observation,
+    num_epochs=1500,
+    batch_size=100,
+    lr_born_machine=0.003,
+    lr_classifier=0.03,
+    k_classifier_steps=5,
+    k_born_steps=1
+)
+```
+
+### Running KSD VI
+
+```python
+from ksd_vi import KSDVariationalInference
+
+# Similar setup as above...
+
+model = KSDVariationalInference(
+    bn, latent_vars, observed_vars,
+    born_config,
+    base_kernel_length_scale=1.0
+)
+
+history = model.train(
+    observation,
+    num_epochs=2000,
+    lr_born_machine=0.003,
+    entropy_weight=0.001,
+    patience=200
+)
+```
+
+## Training Parameters
+
+### Common Parameters
+- `num_epochs`: Number of training iterations
+- `lr_born_machine`: Learning rate for Born machine parameters
+- `use_lr_scheduler`: Enable cosine annealing (recommended)
+- `gradient_clip_norm`: Maximum gradient norm for clipping
+- `optimizer_type`: "adam" or "sgd"
+
+### Adversarial VI Specific
+- `batch_size`: Number of samples per batch
+- `lr_classifier`: Learning rate for adversarial classifier
+- `k_classifier_steps`: Classifier updates per Born machine update
+- `k_born_steps`: Born machine updates per iteration
+- `baseline_decay`: Exponential decay for REINFORCE baseline
+
+### KSD VI Specific
+- `entropy_weight`: Regularization weight for entropy bonus
+- `patience`: Early stopping patience (epochs without improvement)
+
+## Quantum Implementation Details
+
+### Ansatz Options
+1. **Hardware Efficient**: Single-qubit rotations + nearest-neighbor entanglement
+2. **All-to-All**: Single-qubit rotations + all-to-all entanglement
+3. **Basic**: Simple RY-RZ rotations with linear entanglement
+
+### Initialization Methods
+- `"zero"`: All parameters initialized to zero
+- `"small_random"`: Small random perturbations (recommended)
+- `"random"`: Random initialization in [0, 2π]
+
+## Evaluation Metrics
+
+- **Total Variation Distance (TVD)**: Primary metric for distribution comparison
+- **KSD Loss**: Kernelized Stein discrepancy value
+- **Gradient Norms**: For monitoring training stability
+- **Entropy**: Distribution entropy (for KSD regularization)
+
+## Visualization
+
+The training scripts automatically generate plots showing:
+- Loss curves over epochs
+- TVD evolution
+- Gradient norms
+- Probability distribution comparisons
+- Stability metrics
 
 ## Contributing
 
-Contributions are welcome! Please feel free to open an issue or submit a pull request.
+Contributions are welcome! Areas for improvement include:
+- Extended to continuous variables
+- More sophisticated quantum ansätze
+- Amortized inference implementations
+- Support for larger Bayesian networks
+- Hardware quantum device integration
+
+## Citation
+
+If you use this code in your research, please cite:
+```
+@article{PhysRevApplied.16.044057,
+  title = {Variational inference with a quantum computer},
+  author = {...},
+  journal = {Phys. Rev. Applied},
+  volume = {16},
+  pages = {044057},
+  year = {2021}
+}
+```
 
 ## License
 
-(Consider adding a license, e.g., MIT License. If you do, create a `LICENSE` file.)
+[Add your license here - e.g., MIT, Apache 2.0]
+
+## Acknowledgments
+
+This implementation is based on the theoretical framework presented in "Variational Inference with a Quantum Computer" and serves as an educational resource for understanding quantum-inspired machine learning algorithms.
