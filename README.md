@@ -274,10 +274,6 @@ If you use this code in your research, please cite:
 }
 ```
 
-## License
-
-[Add your license here - e.g., MIT, Apache 2.0]
-
 ## Acknowledgments
 
 This implementation is based on the theoretical framework presented in "Variational Inference with a Quantum Computer" and serves as an educational resource for understanding quantum-inspired machine learning algorithms.
